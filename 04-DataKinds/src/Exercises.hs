@@ -308,18 +308,19 @@ data Vector (n :: Nat) (a :: Type) where
 -- | a. Implement this type! This might seem scary at first, but break it down
 -- into Z and S cases. That's all the hint you need :)
 
-data SmallerThan (limit :: Nat) where
-  FinZ :: SmallerThan ('S n)
-  FinS :: SmallerThan n -> SmallerThan ('S n)
+-- | The desired data type is the type of finite sets Fin.
+data Fin (limit :: Nat) where
+  FinZ :: Fin ('S n)
+  FinS :: Fin n -> Fin ('S n)
 
 -- | b. Write the '(!!)' function:
 
-(!!) :: Vector n a -> SmallerThan n -> a
+(!!) :: Vector n a -> Fin n -> a
 (VCons x _) !! FinZ = x
 (VCons x xs) !! (FinS n) = xs !! n
 
--- | c. Write a function that converts a @SmallerThan n@ into a 'Nat'.
+-- | c. Write a function that converts a @Fin n@ into a 'Nat'.
 
-finToNat :: SmallerThan n -> Nat
+finToNat :: Fin n -> Nat
 finToNat FinZ = S Z
 finToNat (FinS n) = S (finToNat n)
