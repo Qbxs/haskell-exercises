@@ -2,9 +2,11 @@
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE GADTs          #-}
 {-# LANGUAGE RankNTypes     #-}
+{-# LANGUAGE LambdaCase     #-}
 module Exercises where
 
 import Data.Kind (Type)
+import Data.Maybe (fromMaybe)
 
 
 
@@ -20,17 +22,25 @@ data Exlistential where
 
 -- | a. Write a function to "unpack" this exlistential into a list.
 
--- unpackExlistential :: Exlistential -> (forall a. a -> r) -> [r]
--- unpackExlistential = error "Implement me!"
+unpackExlistential :: Exlistential -> (forall a. a -> r) -> [r]
+unpackExlistential Nil _ = []
+unpackExlistential (Cons x xs) f = f x : (unpackExlistential xs f)
 
 -- | b. Regardless of which type @r@ actually is, what can we say about the
 -- values in the resulting list?
 
+-- ?
+
 -- | c. How do we "get back" knowledge about what's in the list? Can we?
 
+{-
+getOut :: Exlistential -> [a]
+getOut exl = unpackExlistential exl id
+-}
 
-
-
+-- it may look as if it could work with something like this however id does not match the required type
+-- in fact since there is no general function f :: a -> b we have to use a 'forgetful' function which does not preserve the type
+-- e.g. f _ = ()
 
 {- TWO -}
 
@@ -42,15 +52,17 @@ data CanFold a where
 
 -- | a. The following function unpacks a 'CanFold'. What is its type?
 
--- unpackCanFold :: ???
--- unpackCanFold f (CanFold x) = f x
+unpackCanFold :: (forall f. Foldable f => f a -> m) -> CanFold a -> m
+unpackCanFold f (CanFold x) = f x
 
 -- | b. Can we use 'unpackCanFold' to figure out if a 'CanFold' is "empty"?
 -- Could we write @length :: CanFold a -> Int@? If so, write it!
 
+
 -- | c. Write a 'Foldable' instance for 'CanFold'. Don't overthink it.
 
-
+instance Foldable CanFold where
+  foldMap cat f = unpackCanFold (foldMap cat) f
 
 
 
@@ -64,14 +76,21 @@ data EqPair where
 -- | a. Write a function that "unpacks" an 'EqPair' by applying a user-supplied
 -- function to its pair of values in the existential type.
 
+unPackEqPair :: EqPair -> (forall a. a -> a -> r) -> r
+unPackEqPair (EqPair x y) f = f x y
+
 -- | b. Write a function that takes a list of 'EqPair's and filters it
 -- according to some predicate on the unpacked values.
+
+filterEqPair :: [EqPair] -> (forall a. a -> a -> Bool) -> [EqPair]
+filterEqPair pairs p = filter (\x -> unPackEqPair x p) pairs
 
 -- | c. Write a function that unpacks /two/ 'EqPair's. Now that both our
 -- variables are in rank-2 position, can we compare values from different
 -- pairs?
 
-
+unPackEqPairs :: EqPair -> EqPair -> (forall a. a -> a -> r) -> (r,r)
+unPackEqPairs (EqPair x y) (EqPair x' y') f = (f x y, f x' y')
 
 
 
@@ -97,10 +116,13 @@ data Nested input output subinput suboutput
 -- | a. Write a GADT to existentialise @subinput@ and @suboutput@.
 
 data NestedX input output where
-  -- ...
+  NestedX :: (forall subinput suboutput. Component subinput suboutput -> input -> output) -> NestedX input output
 
 -- | b. Write a function to "unpack" a NestedX. The user is going to have to
 -- deal with all possible @subinput@ and @suboutput@ types.
+
+unPackNestedX :: NestedX input output -> ((forall subinput suboutput. Component subinput suboutput -> input -> output) -> r) -> r
+unPackNestedX (NestedX x) f = f x
 
 -- | c. Why might we want to existentialise the subtypes away? What do we lose
 -- by doing so? What do we gain?
@@ -136,8 +158,11 @@ class Renderable component where render :: component -> String
 
 -- | a. Write a type for the children.
 
+data HTML = HTML { properties :: (String, String), children :: forall component. Renderable component => component }
+
 -- | b. What I'd really like to do when rendering is 'fmap' over the children
 -- with 'render'; what's stopping me? Fix it!
+
 
 -- | c. Now that we're an established Haskell shop, we would /also/ like the
 -- option to render our HTML to a Shakespeare template to write to a file
@@ -161,11 +186,25 @@ data MysteryBox a where
 -- | a. Knowing what we now know about RankNTypes, we can write an 'unwrap'
 -- function! Write the function, and don't be too upset if we need a 'Maybe'.
 
+unwrap :: MysteryBox a -> (forall a. MysteryBox a -> r) -> Maybe r
+unwrap EmptyBox _ = Nothing
+unwrap (IntBox _ box) f = Just $ f box
+unwrap (StringBox _ box) f = Just $ f box
+unwrap (BoolBox _ box) f = Just $ f box
+
 -- | b. Why do we need a 'Maybe'? What can we still not know?
+
+-- We cannot get something of type c from the empty box.
 
 -- | c. Write a function that uses 'unwrap' to print the name of the next
 -- layer's constructor.
 
+printBox :: MysteryBox a -> String
+printBox box = fromMaybe "Nothing" $ unwrap box $ \case
+  EmptyBox{} -> "EmptyBox"
+  IntBox{} -> "IntBox"
+  StringBox{} -> "StringBox"
+  BoolBox{} -> "BoolBox"
 
 
 
@@ -183,7 +222,8 @@ data SNat (n :: Nat) where
 -- | We also saw that we could convert from an 'SNat' to a 'Nat':
 
 toNat :: SNat n -> Nat
-toNat = error "You should already know this one ;)"
+toNat SZ = Z
+toNat (SS n) = S (toNat n)
 
 -- | How do we go the other way, though? How do we turn a 'Nat' into an 'SNat'?
 -- In the general case, this is impossible: the 'Nat' could be calculated from
@@ -195,6 +235,10 @@ toNat = error "You should already know this one ;)"
 -- SNat-accepting function (maybe at a higher rank?) that returns an @r@, and
 -- then returns an @r@. The successor case is a bit weird here - type holes
 -- will help you!
+
+fromNat :: Nat -> (forall n. SNat n -> r) -> r
+fromNat Z f = f SZ
+fromNat (S n) f = fromNat n (f . SS)
 
 -- | If you're looking for a property that you could use to test your function,
 -- remember that @fromNat x toNat === x@!
@@ -214,3 +258,13 @@ data Vector (n :: Nat) (a :: Type) where
 -- | It would be nice to have a 'filter' function for vectors, but there's a
 -- problem: we don't know at compile time what the new length of our vector
 -- will be... but has that ever stopped us? Make it so!
+
+vFilter :: forall (n :: Nat) (a :: Type) (r :: Type).
+             (a -> Bool)
+          -> Vector n a
+          -> (forall (k :: Nat). Vector k a -> r)
+          -> r
+vFilter p VNil k = k VNil
+vFilter p (VCons x xs) k
+        | p x = vFilter p xs (k . VCons x)
+        | otherwise = vFilter p xs k
