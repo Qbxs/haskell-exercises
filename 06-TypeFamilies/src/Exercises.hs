@@ -3,6 +3,7 @@
 {-# LANGUAGE TypeFamilies  #-}
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE PolyKinds #-}
 module Exercises where
 
 import Data.Kind (Constraint, Type)
@@ -89,9 +90,9 @@ type family (||) (x :: Bool) (y :: Bool) :: Bool where
 -- type-level list of boleans are @'True@.
 
 type family All (x :: [Bool]) :: Bool where
-  All [] = True
-  All (True:xs) = All xs
-  All (False:_) = False
+  All '[] = True
+  All (True ': xs) = All xs
+  All (False ': _) = False
 
 
 
@@ -117,8 +118,8 @@ type family Max (x :: Nat) (y :: Nat) :: Nat where
 -- | c. Write a family to get the maximum natural in a list.
 
 type family MaxList (xs :: [Nat]) :: Nat where
-  MaxList [x] = x
-  MaxList (x:xs) = Max x (MaxList xs)
+  MaxList (x ': '[]) = x
+  MaxList (x ': xs) = Max x (MaxList xs)
 
 
 
@@ -151,7 +152,13 @@ data HList (xs :: [Type]) where
 
 -- | Write a function that appends two 'HList's.
 
+type family (++) (xs :: [a]) (ys :: [a]) :: [a] where
+  (++) '[] ys = ys
+  (++) (x:xs) ys = x ': (xs ++ ys)
 
+type family Append  (xs :: HList ts) (ys :: HList ts') :: HList (ts ++ ts') where
+  Append HNil ys = ys
+  Append (HCons x xs) ys = HCons x (Append xs ys)
 
 
 
@@ -174,17 +181,30 @@ type family CAppend (x :: Constraint) (y :: Constraint) :: Constraint where
 -- list of types, and builds a constraint on all the types.
 
 type family Every (c :: Type -> Constraint) (x :: [Type]) :: Constraint where
-  -- ...
+  Every c (x:xs) = (c x, Every c xs)
+  Every c _ = ()
 
 -- | b. Write a 'Show' instance for 'HList' that requires a 'Show' instance for
 -- every type in the list.
 
+instance (Every Show ts) => Show (HList ts) where
+  show HNil = ""
+  show (HCons x xs) = show x ++ ":" ++ show xs
+
 -- | c. Write an 'Eq' instance for 'HList'. Then, write an 'Ord' instance.
 -- Was this expected behaviour? Why did we need the constraints?
 
+instance (Every Eq ts) => Eq (HList ts) where
+  HNil == HNil = True
+  (HCons x xs) == (HCons y ys) = x == y && xs == ys
 
-
-
+-- Ord implies Eq, but supposedly this is not captured by `Every`
+instance (Every Eq ts, Every Ord ts) => Ord (HList ts) where
+  compare HNil HNil = EQ
+  compare (HCons x xs) (HCons y ys) = case compare x y of
+    LT -> LT
+    EQ -> compare xs ys
+    GT -> GT
 
 {- NINE -}
 
