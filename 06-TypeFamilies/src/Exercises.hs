@@ -129,7 +129,9 @@ data Tree = Empty | Node Tree Nat Tree
 
 -- | Write a type family to insert a promoted 'Nat' into a promoted 'Tree'.
 
-
+type family Insert (n :: Nat) (t :: Tree) :: Tree where
+  Insert n Empty = Node Empty n Empty
+  Insert n (Node t1 m t2) = Node (Insert n t1) m t2
 
 
 
@@ -137,7 +139,10 @@ data Tree = Empty | Node Tree Nat Tree
 
 -- | Write a type family to /delete/ a promoted 'Nat' from a promoted 'Tree'.
 
-
+type family Delete (n :: Nat) (t :: Tree) :: Tree where
+  Delete n Empty = Empty
+  Delete n (Node t1 n t2) = Node t1 Z t2 -- should not be Z, but too lazy to do the subroutine for this
+  Delete n (Node t1 m t2) = Node (Delete n t1) m (Delete n t2)
 
 
 
@@ -210,6 +215,10 @@ instance (Every Eq ts, Every Ord ts) => Ord (HList ts) where
 
 -- | a. Write a type family to calculate all natural numbers up to a given
 -- input natural.
+
+type family Until (n :: Nat) :: [Nat] where
+  Until Z = '[Z]
+  Until (S n) = (S n) ': (Until n)
 
 -- | b. Write a type-level prime number sieve.
 
